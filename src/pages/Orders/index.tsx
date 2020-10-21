@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { Image } from 'react-native';
+import React, { useCallback, useLayoutEffect, useState } from 'react';
+import { Alert, Image } from 'react-native';
 
 import api from '../../services/api';
 import formatValue from '../../utils/formatValue';
@@ -30,13 +30,35 @@ interface Food {
 const Orders: React.FC = () => {
   const [orders, setOrders] = useState<Food[]>([]);
 
-  useEffect(() => {
-    async function loadOrders(): Promise<void> {
-      // Load orders from API
-    }
+  const loadOrders = useCallback(async () => {
+    try {
+      const response = await api.get(`/orders`);
 
-    loadOrders();
+      let orderData = response.data as Food[];
+
+      orderData = orderData.map(food => ({
+        ...food,
+        formattedPrice: formatValue(food.price),
+      }));
+
+      setOrders(orderData);
+    } catch {
+      Alert.alert('Error on load order');
+    }
   }, []);
+
+  const handleDeleteFood = useCallback(
+    async (id: number) => {
+      await api.delete(`/orders/${id}`);
+
+      loadOrders();
+    },
+    [loadOrders],
+  );
+
+  useLayoutEffect(() => {
+    loadOrders();
+  }, [loadOrders]);
 
   return (
     <Container>
@@ -49,7 +71,11 @@ const Orders: React.FC = () => {
           data={orders}
           keyExtractor={item => String(item.id)}
           renderItem={({ item }) => (
-            <Food key={item.id} activeOpacity={0.6}>
+            <Food
+              key={item.id}
+              activeOpacity={0.6}
+              onPress={() => handleDeleteFood(item.id)}
+            >
               <FoodImageContainer>
                 <Image
                   style={{ width: 88, height: 88 }}
