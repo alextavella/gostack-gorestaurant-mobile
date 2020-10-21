@@ -72,16 +72,15 @@ const FoodDetails: React.FC = () => {
   useEffect(() => {
     async function loadFood(): Promise<void> {
       try {
-        const response = await api.get(`/foods/${routeParams.id}`);
+        const foodResponse = await api.get(`/foods/${routeParams.id}`);
 
-        let foodData = response.data as Food;
+        let foodData = foodResponse.data as Food;
         foodData = {
           ...foodData,
           formattedPrice: formatValue(foodData.price),
         };
 
         setFood(foodData);
-        setIsFavorite(!!foodData?.favorite);
 
         const extrasData = foodData.extras.map(e => ({
           ...e,
@@ -89,6 +88,10 @@ const FoodDetails: React.FC = () => {
         }));
 
         setExtras(extrasData);
+
+        api.get(`/favorites/${routeParams.id}`).then(favResponse => {
+          setIsFavorite(!!favResponse.data);
+        });
       } catch (err) {
         Alert.alert('Error on food load details');
       }
@@ -123,17 +126,20 @@ const FoodDetails: React.FC = () => {
     setFoodQuantity(value => Math.max(value - 1, 1));
   }
 
-  const toggleFavorite = useCallback(() => {
-    const payload: Food = {
-      ...food,
-      favorite: !isFavorite,
-      formattedPrice: '',
-    };
+  const toggleFavorite = useCallback(async () => {
+    try {
+      const favorite = !isFavorite;
 
-    api
-      .put(`/foods/${routeParams.id}`, payload)
-      .then(() => setIsFavorite(!isFavorite))
-      .catch(() => Alert.alert('Error on favorite food'));
+      if (favorite) {
+        await api.post(`/favorites`, food);
+      } else {
+        await api.delete(`/favorites/${routeParams.id}`);
+      }
+
+      setIsFavorite(favorite);
+    } catch {
+      Alert.alert('Error on favorite food');
+    }
   }, [food, isFavorite, routeParams.id]);
 
   const cartTotal = useMemo<string>(() => {
@@ -147,7 +153,13 @@ const FoodDetails: React.FC = () => {
   }, [extras, food, foodQuantity]);
 
   async function handleFinishOrder(): Promise<void> {
-    // Finish the order and save on the API
+    try {
+      api.post(`/orders`, food).finally(() => {
+        navigation.navigate('Orders');
+      });
+    } catch (err) {
+      Alert.alert('Error on finish order.');
+    }
   }
 
   // Calculate the correct icon name
