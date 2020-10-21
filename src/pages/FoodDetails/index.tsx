@@ -1,42 +1,39 @@
+import { useNavigation, useRoute } from '@react-navigation/native';
 import React, {
-  useEffect,
-  useState,
   useCallback,
-  useMemo,
+  useEffect,
   useLayoutEffect,
+  useMemo,
+  useState,
 } from 'react';
-import { Image } from 'react-native';
-
+import { Alert, Image } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import MaterialIcon from 'react-native-vector-icons/MaterialIcons';
-import { useNavigation, useRoute } from '@react-navigation/native';
-import formatValue from '../../utils/formatValue';
-
 import api from '../../services/api';
-
+import formatValue from '../../utils/formatValue';
 import {
-  Container,
-  Header,
-  ScrollContainer,
-  FoodsContainer,
-  Food,
-  FoodImageContainer,
-  FoodContent,
-  FoodTitle,
-  FoodDescription,
-  FoodPricing,
   AdditionalsContainer,
-  Title,
-  TotalContainer,
   AdittionalItem,
   AdittionalItemText,
   AdittionalQuantity,
-  PriceButtonContainer,
-  TotalPrice,
-  QuantityContainer,
-  FinishOrderButton,
   ButtonText,
+  Container,
+  FinishOrderButton,
+  Food,
+  FoodContent,
+  FoodDescription,
+  FoodImageContainer,
+  FoodPricing,
+  FoodsContainer,
+  FoodTitle,
+  Header,
   IconContainer,
+  PriceButtonContainer,
+  QuantityContainer,
+  ScrollContainer,
+  Title,
+  TotalContainer,
+  TotalPrice,
 } from './styles';
 
 interface Params {
@@ -58,13 +55,14 @@ interface Food {
   image_url: string;
   formattedPrice: string;
   extras: Extra[];
+  favorite?: boolean;
 }
 
 const FoodDetails: React.FC = () => {
-  const [food, setFood] = useState({} as Food);
+  const [food, setFood] = useState<Food>({} as Food);
   const [extras, setExtras] = useState<Extra[]>([]);
-  const [isFavorite, setIsFavorite] = useState(false);
-  const [foodQuantity, setFoodQuantity] = useState(1);
+  const [isFavorite, setIsFavorite] = useState<boolean>(false);
+  const [foodQuantity, setFoodQuantity] = useState<number>(1);
 
   const navigation = useNavigation();
   const route = useRoute();
@@ -73,34 +71,79 @@ const FoodDetails: React.FC = () => {
 
   useEffect(() => {
     async function loadFood(): Promise<void> {
-      // Load a specific food with extras based on routeParams id
+      try {
+        const response = await api.get(`/foods/${routeParams.id}`);
+
+        let foodData = response.data as Food;
+        foodData = {
+          ...foodData,
+          formattedPrice: formatValue(foodData.price),
+        };
+
+        setFood(foodData);
+        setIsFavorite(!!foodData?.favorite);
+
+        const extrasData = foodData.extras.map(e => ({
+          ...e,
+          quantity: 0,
+        }));
+
+        setExtras(extrasData);
+      } catch (err) {
+        Alert.alert('Error on food load details');
+      }
     }
 
     loadFood();
   }, [routeParams]);
 
   function handleIncrementExtra(id: number): void {
-    // Increment extra quantity
+    const extra = extras.find(e => e.id === id);
+
+    if (extra) {
+      extra.quantity += 1;
+      setExtras([...extras]);
+    }
   }
 
   function handleDecrementExtra(id: number): void {
-    // Decrement extra quantity
+    const extra = extras.find(e => e.id === id);
+
+    if (extra) {
+      extra.quantity = Math.max(extra.quantity - 1, 0);
+      setExtras([...extras]);
+    }
   }
 
   function handleIncrementFood(): void {
-    // Increment food quantity
+    setFoodQuantity(value => value + 1);
   }
 
   function handleDecrementFood(): void {
-    // Decrement food quantity
+    setFoodQuantity(value => Math.max(value - 1, 1));
   }
 
   const toggleFavorite = useCallback(() => {
-    // Toggle if food is favorite or not
-  }, [isFavorite, food]);
+    const payload: Food = {
+      ...food,
+      favorite: !isFavorite,
+      formattedPrice: '',
+    };
 
-  const cartTotal = useMemo(() => {
-    // Calculate cartTotal
+    api
+      .put(`/foods/${routeParams.id}`, payload)
+      .then(() => setIsFavorite(!isFavorite))
+      .catch(() => Alert.alert('Error on favorite food'));
+  }, [food, isFavorite, routeParams.id]);
+
+  const cartTotal = useMemo<string>(() => {
+    const extraValue = extras.reduce((acc: number, e: Extra) => {
+      return acc + e.value * e.quantity;
+    }, 0);
+
+    const foodValue = (food.price + extraValue) * foodQuantity;
+
+    return formatValue(foodValue);
   }, [extras, food, foodQuantity]);
 
   async function handleFinishOrder(): Promise<void> {
@@ -108,7 +151,7 @@ const FoodDetails: React.FC = () => {
   }
 
   // Calculate the correct icon name
-  const favoriteIconName = useMemo(
+  const favoriteIconName = useMemo<string>(
     () => (isFavorite ? 'favorite' : 'favorite-border'),
     [isFavorite],
   );
